@@ -8,17 +8,18 @@
 
 std::mutex mutex;
 std::vector<double> frequencies;
+const uint32_t WIDTH = 1280;
+const uint32_t HEIGHT = 600;
+const uint8_t BARS = 30;
+double scale1 = 160;
+double scale2 = 1.1e-8;
+double sensitivity = 0;
 
 class Recorder : public sf::SoundRecorder
 {
-	virtual bool onStart() // optional
+	virtual bool onStart()
 	{
 		// initialize whatever has to be done before the capture starts
-		/*
-		HWND console = GetConsoleWindow();
-		RECT r;
-		GetWindowRect(console, &r); //stores the console's current dimensions
-		MoveWindow(console, r.left, r.top, 300, 520, TRUE);*/
 		std::cout << "Recorder Started" << std::endl;
 		setProcessingInterval(sf::Time(sf::milliseconds(5)));
 		// return true to start the capture, or false to cancel it
@@ -26,9 +27,10 @@ class Recorder : public sf::SoundRecorder
 	}
 
 	double* truncate(complex* const data, size_t size, size_t newSize) {
+		// truncate the data array by averaging the values over chunks
 		double* result = new double[newSize];
 		double buffer;
-		size_t chunkSize = size / newSize / 23;
+		const size_t chunkSize = size / newSize / 23;
 		size_t chunk = 0;
 
 		for (size_t i = 0; i < size && chunk < newSize; i += chunkSize) {
@@ -42,19 +44,6 @@ class Recorder : public sf::SoundRecorder
 		}
 
 		return result;
-	}
-
-	void clear() {
-		COORD topLeft = { 0, 0 };
-		HANDLE console = GetStdHandle(STD_OUTPUT_HANDLE);
-		CONSOLE_SCREEN_BUFFER_INFO screen;
-		DWORD written;
-
-		GetConsoleScreenBufferInfo(console, &screen);
-		FillConsoleOutputCharacterA(
-			console, ' ', screen.dwSize.X * screen.dwSize.Y, topLeft, &written
-		);
-		SetConsoleCursorPosition(console, topLeft);
 	}
 
 	virtual bool onProcessSamples(const sf::Int16* samples, size_t sampleCount)
@@ -77,29 +66,25 @@ class Recorder : public sf::SoundRecorder
 			return false;
 		}
 
-		const uint16_t bars = 30;
-		double* transform = truncate(complexSamples, size, bars);
-		const double scale1 = 160;
-		const double scale2 = 1.1e-8;
-		const double sensitivity = 0;
+		double* transform = truncate(complexSamples, size, BARS);
 
+		// protect access to variables of external threads
 		mutex.lock();
-		//frequencies.clear();
+
 		if (frequencies.size() == 0) {
-			for (int i = 0; i < bars; i++) {
+			for (int i = 0; i < BARS; i++) {
 				double magnitude = log10(transform[i] * scale2) * scale1;
 				frequencies.push_back(magnitude);
 			}
 		}
 		else {
-			for (int i = 0; i < bars; i++) {
+			for (int i = 0; i < BARS; i++) {
 				double magnitude = log10(transform[i] * scale2) * scale1;
 				frequencies[i] = (frequencies[i] * 0.333 + magnitude * 0.666);
 			}
 		}
-		mutex.unlock();
 
-		//std::cout << sampleCount << std::endl;
+		mutex.unlock();
 
 		delete[] transform;
 		delete[] complexSamples;
@@ -120,30 +105,38 @@ void renderingThread(sf::RenderWindow* window)
 	// activate the window's context
 	window->setActive(true);
 
+	std::cout << "[Right/Left] Increase/Decrease Logarithmic Scale" << std::endl;
+	std::cout << "[Up/Down] Increase/Decrease Linear Scale" << std::endl;
+
 	// the rendering loop
 	while (window->isOpen())
 	{
 		// clear the window with black color
 		window->clear(sf::Color::Black);
+
+		// protect access to variables of external threads
 		mutex.lock();
+
 		// draw everything here...
 		for (int i = 0; i < frequencies.size(); i++) {
 			double magnitude = frequencies[i];
 			if (magnitude < 3) {
 				magnitude = 3;
 			}
-			else if (magnitude > 500) {
-				magnitude = 500;
+			else if (magnitude > HEIGHT - 100) {
+				magnitude = HEIGHT - 100;
 			}
-			double barWidth = 1280 / frequencies.size() * 0.95;
-			double margin_x = (1280 - barWidth * frequencies.size()) / 2;
+			double barWidth = WIDTH / frequencies.size() * 0.95;
+			double margin_x = (WIDTH - barWidth * frequencies.size()) / 2;
 			double margin_y = 50;
 			sf::RectangleShape rectangle(sf::Vector2f(barWidth * 0.9, -magnitude));
-			rectangle.setPosition(i * barWidth + margin_x, 600 - margin_y);
+			rectangle.setPosition(i * barWidth + margin_x, HEIGHT - margin_y);
 			rectangle.setFillColor(sf::Color(0, 0, 255));
 			window->draw(rectangle);
 		}
+
 		mutex.unlock();
+
 		// end the current frame
 		window->display();
 	}
@@ -151,8 +144,9 @@ void renderingThread(sf::RenderWindow* window)
 
 int main() {
 	frequencies = std::vector<double>();
+
 	// create the window (remember: it's safer to create it in the main thread due to OS limitations)
-	sf::RenderWindow window(sf::VideoMode(1280, 600), "OpenGL");
+	sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "OpenGL");
 	window.setVerticalSyncEnabled(true);
 	// deactivate its OpenGL context
 	window.setActive(false);
@@ -194,6 +188,39 @@ int main() {
 			// "close requested" event: we close the window
 			if (event.type == sf::Event::Closed) {
 				window.close();
+			}
+			else if (event.type == sf::Event::KeyPressed) {
+				// protect access to variables of external threads
+				mutex.lock();
+
+				switch (event.key.code) {
+				case sf::Keyboard::Up:
+					if (scale1 < 1000) {
+						scale1 *= 1.1;
+						std::cout << "[+] Linear Scale: " << scale1 << std::endl;
+					}
+					break;
+				case sf::Keyboard::Down:
+					if (scale1 > 10) {
+						scale1 /= 1.1;
+						std::cout << "[-] Linear Scale: " << scale1 << std::endl;
+					}
+					break;
+				case sf::Keyboard::Right:
+					if (scale2 < 1e-3) {
+						scale2 *= 1.1;
+						std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
+					}
+					break;
+				case sf::Keyboard::Left:
+					if (scale2 > 1e-12) {
+						scale2 /= 1.1;
+						std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
+					}
+					break;
+				}
+
+				mutex.unlock();
 			}
 		}
 	}
