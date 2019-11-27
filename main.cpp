@@ -10,10 +10,11 @@ std::mutex mutex;
 std::vector<double> frequencies;
 const uint32_t WIDTH = 1280;
 const uint32_t HEIGHT = 600;
-const uint8_t BARS = 30;
+uint16_t bars = 30;
 double scale1 = 160;
 double scale2 = 1.1e-8;
 double sensitivity = 0;
+double smoothing = 0.3;
 
 class Recorder : public sf::SoundRecorder
 {
@@ -66,21 +67,21 @@ class Recorder : public sf::SoundRecorder
 			return false;
 		}
 
-		double* transform = truncate(complexSamples, size, BARS);
+		double* transform = truncate(complexSamples, size, bars);
 
 		// protect access to variables of external threads
 		mutex.lock();
 
 		if (frequencies.size() == 0) {
-			for (int i = 0; i < BARS; i++) {
+			for (int i = 0; i < bars; i++) {
 				double magnitude = log10(transform[i] * scale2) * scale1;
 				frequencies.push_back(magnitude);
 			}
 		}
 		else {
-			for (int i = 0; i < BARS; i++) {
+			for (int i = 0; i < bars; i++) {
 				double magnitude = log10(transform[i] * scale2) * scale1;
-				frequencies[i] = (frequencies[i] * 0.333 + magnitude * 0.666);
+				frequencies[i] = (frequencies[i] * smoothing + magnitude * (1 - smoothing));
 			}
 		}
 
@@ -105,8 +106,27 @@ void renderingThread(sf::RenderWindow* window)
 	// activate the window's context
 	window->setActive(true);
 
-	std::cout << "[Right/Left] Increase/Decrease Logarithmic Scale" << std::endl;
-	std::cout << "[Up/Down] Increase/Decrease Linear Scale" << std::endl;
+	std::cout << "--------------------------------------------------" << std::endl;
+
+	std::cout << "[Controls]" << std::endl;
+
+	std::cout << "[Right/Left] Increase/Decrease Logarithmic Scaling (Not Recommended)" << std::endl;
+	std::cout << "[Up/Down] Increase/Decrease Linear Scaling" << std::endl;
+	std::cout << "[CTRL + Up/Down] Increase/Decrease Bars" << std::endl;
+	std::cout << "[CTRL + Right/Left] Increase/Decrease Smoothing" << std::endl;
+
+	std::cout << "--------------------------------------------------" << std::endl;
+
+	std::cout << "[Defaults]" << std::endl;
+
+	std::cout << "Logarithmic Scaling: " << scale2 << std::endl;
+	std::cout << "Linear Scaling: " << scale1 << std::endl;
+	std::cout << "Bars: " << bars << std::endl;
+	std::cout << "Smoothing: " << smoothing << std::endl;
+
+	std::cout << "--------------------------------------------------" << std::endl;
+
+	std::cout << "[Logs]" << std::endl;
 
 	// the rendering loop
 	while (window->isOpen())
@@ -126,12 +146,12 @@ void renderingThread(sf::RenderWindow* window)
 			else if (magnitude > HEIGHT * 0.86) {
 				magnitude = HEIGHT * 0.86;
 			}
-			double barWidth = WIDTH / frequencies.size() * 0.95;
-			double margin_x = (WIDTH - barWidth * frequencies.size()) / 2;
+			double margin_x = WIDTH * 0.035;
 			double margin_y = HEIGHT * 0.07;
+			double barWidth = (WIDTH - 2 * margin_x) / frequencies.size(); 
 			sf::RectangleShape rectangle(sf::Vector2f(barWidth * 0.9, -magnitude));
-			rectangle.setPosition(i * barWidth + margin_x, HEIGHT - margin_y);
-			rectangle.setFillColor(sf::Color(0, 0, 255));
+			rectangle.setPosition(i * barWidth + margin_x + (0.1 * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
+			rectangle.setFillColor(sf::Color(255 - 200 * (1 - (magnitude / (HEIGHT * 0.86))), 0, 0));
 			window->draw(rectangle);
 		}
 
@@ -148,6 +168,7 @@ int main() {
 	// create the window (remember: it's safer to create it in the main thread due to OS limitations)
 	sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "OpenGL");
 	window.setVerticalSyncEnabled(true);
+	window.setTitle("Audio Visualizer");
 	// deactivate its OpenGL context
 	window.setActive(false);
 
@@ -192,32 +213,67 @@ int main() {
 			else if (event.type == sf::Event::KeyPressed) {
 				// protect access to variables of external threads
 				mutex.lock();
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
+					switch (event.key.code) {
+					case sf::Keyboard::Up:
+						if (bars < 100) {
+							bars++;
+							frequencies.clear();
+							std::cout << "[+] Bars: " << bars << std::endl;
+						}
+						break;
+					case sf::Keyboard::Down:
+						if (bars > 1) {
+							bars--;
+							frequencies.clear();
+							std::cout << "[-] Bars: " << bars << std::endl;
+						}
+						break;
 
-				switch (event.key.code) {
-				case sf::Keyboard::Up:
-					if (scale1 < 1000) {
-						scale1 *= 1.1;
-						std::cout << "[+] Linear Scale: " << scale1 << std::endl;
+					case sf::Keyboard::Right:
+						if (smoothing < 0.95) {
+							smoothing += 0.05;
+							std::cout << "[+] Smoothing: " << smoothing << std::endl;
+						}
+						break;
+					case sf::Keyboard::Left:
+						if (smoothing >= 0.05) {
+							smoothing -= 0.05;
+							if (smoothing < 0.04) {
+								smoothing = 0;
+							}
+							std::cout << "[-] Smoothing: " << smoothing << std::endl;
+						}
+						break;
 					}
-					break;
-				case sf::Keyboard::Down:
-					if (scale1 > 10) {
-						scale1 /= 1.1;
-						std::cout << "[-] Linear Scale: " << scale1 << std::endl;
+				}
+				else {
+					switch (event.key.code) {
+					case sf::Keyboard::Up:
+						if (scale1 < 1000) {
+							scale1 *= 1.1;
+							std::cout << "[+] Linear Scale: " << scale1 << std::endl;
+						}
+						break;
+					case sf::Keyboard::Down:
+						if (scale1 > 10) {
+							scale1 /= 1.1;
+							std::cout << "[-] Linear Scale: " << scale1 << std::endl;
+						}
+						break;
+					case sf::Keyboard::Right:
+						if (scale2 < 1e-3) {
+							scale2 *= 1.1;
+							std::cout << "[+] Logarithmic Scale: " << scale2 << std::endl;
+						}
+						break;
+					case sf::Keyboard::Left:
+						if (scale2 > 1e-12) {
+							scale2 /= 1.1;
+							std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
+						}
+						break;
 					}
-					break;
-				case sf::Keyboard::Right:
-					if (scale2 < 1e-3) {
-						scale2 *= 1.1;
-						std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
-					}
-					break;
-				case sf::Keyboard::Left:
-					if (scale2 > 1e-12) {
-						scale2 /= 1.1;
-						std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
-					}
-					break;
 				}
 
 				mutex.unlock();
