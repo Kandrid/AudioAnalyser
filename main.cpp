@@ -123,12 +123,12 @@ void renderingThread(sf::RenderWindow* window)
 			if (magnitude < 3) {
 				magnitude = 3;
 			}
-			else if (magnitude > HEIGHT - 100) {
-				magnitude = HEIGHT - 100;
+			else if (magnitude > HEIGHT * 0.86) {
+				magnitude = HEIGHT * 0.86;
 			}
 			double barWidth = WIDTH / frequencies.size() * 0.95;
 			double margin_x = (WIDTH - barWidth * frequencies.size()) / 2;
-			double margin_y = 50;
+			double margin_y = HEIGHT * 0.07;
 			sf::RectangleShape rectangle(sf::Vector2f(barWidth * 0.9, -magnitude));
 			rectangle.setPosition(i * barWidth + margin_x, HEIGHT - margin_y);
 			rectangle.setFillColor(sf::Color(0, 0, 255));
