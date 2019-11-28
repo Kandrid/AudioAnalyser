@@ -14,7 +14,7 @@ uint16_t bars = 30;
 double scale1 = 160;
 double scale2 = 1.1e-8;
 double sensitivity = 0;
-double smoothing = 0.3;
+double smoothing = 0.4;
 
 class Recorder : public sf::SoundRecorder
 {
@@ -110,7 +110,7 @@ void renderingThread(sf::RenderWindow* window)
 
 	std::cout << "[Controls]" << std::endl;
 
-	std::cout << "[Right/Left] Increase/Decrease Logarithmic Scaling (Not Recommended)" << std::endl;
+	std::cout << "[Right/Left] Increase/Decrease Logarithmic Scaling" << std::endl;
 	std::cout << "[Up/Down] Increase/Decrease Linear Scaling" << std::endl;
 	std::cout << "[CTRL + Up/Down] Increase/Decrease Bars" << std::endl;
 	std::cout << "[CTRL + Right/Left] Increase/Decrease Smoothing" << std::endl;
@@ -163,12 +163,20 @@ void renderingThread(sf::RenderWindow* window)
 }
 
 int main() {
+	HWND console = GetConsoleWindow();
+	RECT r;
+	GetWindowRect(console, &r); //stores the console's current dimensions
+	MoveWindow(console, r.left, r.top, 445, 400, TRUE);
+
 	frequencies = std::vector<double>();
 
 	// create the window (remember: it's safer to create it in the main thread due to OS limitations)
 	sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "OpenGL");
 	window.setVerticalSyncEnabled(true);
 	window.setTitle("Audio Visualizer");
+	sf::Image icon;
+	icon.loadFromFile("icon.png");
+	window.setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
 	// deactivate its OpenGL context
 	window.setActive(false);
 
