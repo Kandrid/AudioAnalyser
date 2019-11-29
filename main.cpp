@@ -13,8 +13,11 @@ const uint32_t HEIGHT = 600;
 uint16_t bars = 30;
 double scale1 = 160;
 double scale2 = 1.1e-8;
-double sensitivity = 0;
 double smoothing = 0.4;
+double averageMax = HEIGHT / 2;
+uint32_t autoScaleCycles = 100;
+uint16_t autoScaleCount = 0;
+bool autoScale = false;
 
 class Recorder : public sf::SoundRecorder
 {
@@ -22,7 +25,7 @@ class Recorder : public sf::SoundRecorder
 	{
 		// initialize whatever has to be done before the capture starts
 		std::cout << "Recorder Started" << std::endl;
-		setProcessingInterval(sf::Time(sf::milliseconds(5)));
+		setProcessingInterval(sf::Time(sf::milliseconds(10)));
 		// return true to start the capture, or false to cancel it
 		return true;
 	}
@@ -54,12 +57,7 @@ class Recorder : public sf::SoundRecorder
 		complex* const complexSamples = new complex[size];
 		
 		for (int i = 0; i < size; i++) {
-			if (i < sampleCount) {
-				complexSamples[i] = samples[i];
-			}
-			else {
-				complexSamples[i] = 0;
-			}
+			complexSamples[i] = i < sampleCount ? samples[i] : 0;
 		}
 
 		if (!CFFT::Forward(complexSamples, size)) {
@@ -112,6 +110,7 @@ void renderingThread(sf::RenderWindow* window)
 
 	std::cout << "[Right/Left] Increase/Decrease Logarithmic Scaling" << std::endl;
 	std::cout << "[Up/Down] Increase/Decrease Linear Scaling" << std::endl;
+	std::cout << "[Space] Enable/Disable Auto Scaling" << std::endl;
 	std::cout << "[CTRL + Up/Down] Increase/Decrease Bars" << std::endl;
 	std::cout << "[CTRL + Right/Left] Increase/Decrease Smoothing" << std::endl;
 
@@ -121,6 +120,7 @@ void renderingThread(sf::RenderWindow* window)
 
 	std::cout << "Logarithmic Scaling: " << scale2 << std::endl;
 	std::cout << "Linear Scaling: " << scale1 << std::endl;
+	std::cout << "Auto Scaling: " << autoScale << std::endl;
 	std::cout << "Bars: " << bars << std::endl;
 	std::cout << "Smoothing: " << smoothing << std::endl;
 
@@ -138,8 +138,12 @@ void renderingThread(sf::RenderWindow* window)
 		mutex.lock();
 
 		// draw everything here...
+		double max = 1;
 		for (int i = 0; i < frequencies.size(); i++) {
 			double magnitude = frequencies[i];
+			if (magnitude > max) {
+				max = magnitude;
+			}
 			if (magnitude < 3) {
 				magnitude = 3;
 			}
@@ -153,6 +157,25 @@ void renderingThread(sf::RenderWindow* window)
 			rectangle.setPosition(i * barWidth + margin_x + (0.1 * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
 			rectangle.setFillColor(sf::Color(255 - 200 * (1 - (magnitude / (HEIGHT * 0.86))), 0, 0));
 			window->draw(rectangle);
+		}
+
+		if (autoScale) {
+			double ratio = 1.0 / autoScaleCycles;
+			averageMax = max * ratio + averageMax * (1 - ratio);
+			if (averageMax < HEIGHT * 0.3) {
+				if (scale1 < 1000) {
+					scale1 *= 1.1;
+					averageMax = HEIGHT / 2;
+					std::cout << "[+] Linear Scale: " << scale1 << std::endl;
+				}
+			}
+			else if (averageMax > HEIGHT * 0.7) {
+				if (scale1 > 10) {
+					scale1 /= 1.1;
+					averageMax = HEIGHT / 2;
+					std::cout << "[-] Linear Scale: " << scale1 << std::endl;
+				}
+			}
 		}
 
 		mutex.unlock();
@@ -279,6 +302,15 @@ int main() {
 						if (scale2 > 1e-12) {
 							scale2 /= 1.1;
 							std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
+						}
+						break;
+					case sf::Keyboard::Space:
+						autoScale = !autoScale;
+						if (autoScale) {
+							std::cout << "[+] Auto Scaling: Enabled" << std::endl;
+						}
+						else {
+							std::cout << "[-] Auto Scaling: Disabled" << std::endl;
 						}
 						break;
 					}
