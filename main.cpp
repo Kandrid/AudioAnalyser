@@ -15,7 +15,7 @@ double scale1 = 160;
 double scale2 = 1.1e-8;
 double smoothing = 0.4;
 double averageMax = HEIGHT / 2;
-uint32_t autoScaleCycles = 100;
+uint32_t autoScaleCycles = 500;
 uint16_t autoScaleCount = 0;
 bool autoScale = false;
 
@@ -159,21 +159,25 @@ void renderingThread(sf::RenderWindow* window)
 			window->draw(rectangle);
 		}
 
-		if (autoScale) {
+		if (autoScale && (max > 1 || max > HEIGHT * 0.85)) {
 			double ratio = 1.0 / autoScaleCycles;
 			averageMax = max * ratio + averageMax * (1 - ratio);
-			if (averageMax < HEIGHT * 0.3) {
-				if (scale1 < 1000) {
-					scale1 *= 1.1;
+			autoScaleCount++;
+			if (autoScaleCount > 100) {
+				autoScaleCount = 0;
+				if (averageMax < HEIGHT * 0.5) {
 					averageMax = HEIGHT / 2;
-					std::cout << "[+] Linear Scale: " << scale1 << std::endl;
+					if (scale2 < 1e-3) {
+						scale2 *= 1.1;
+						std::cout << "[+] Logarithmic Scale: " << scale2 << std::endl;
+					}
 				}
-			}
-			else if (averageMax > HEIGHT * 0.7) {
-				if (scale1 > 10) {
-					scale1 /= 1.1;
+				else if (averageMax > HEIGHT * 0.7 || max > HEIGHT * 0.85) {
 					averageMax = HEIGHT / 2;
-					std::cout << "[-] Linear Scale: " << scale1 << std::endl;
+					if (scale2 > 1e-12) {
+						scale2 /= 1.1;
+						std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
+					}
 				}
 			}
 		}
