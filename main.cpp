@@ -215,7 +215,7 @@ int main() {
 	HWND console = GetConsoleWindow();
 	RECT r;
 	GetWindowRect(console, &r); //stores the console's current dimensions
-	MoveWindow(console, r.left, r.top, 445, 400, TRUE);
+	MoveWindow(console, r.left, r.top, 460, 450, TRUE);
 
 	for (int i = 0; i < 256; i++) {
 		gradient[i] = sf::Color(255, i, 0);
