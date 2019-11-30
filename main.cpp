@@ -15,9 +15,13 @@ double scale1 = 160;
 double scale2 = 1.1e-8;
 double smoothing = 0.4;
 double averageMax = HEIGHT / 2;
-uint32_t autoScaleCycles = 500;
+uint32_t autoScaleCycles = 300;
 uint16_t autoScaleCount = 0;
 bool autoScale = false;
+double colourCounter = 0;
+sf::Color gradient[256 * 6];
+double colourChange = 0.05;
+double shadingRatio = 0.8;
 
 class Recorder : public sf::SoundRecorder
 {
@@ -113,6 +117,8 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "[Space] Enable/Disable Auto Scaling" << std::endl;
 	std::cout << "[CTRL + Up/Down] Increase/Decrease Bars" << std::endl;
 	std::cout << "[CTRL + Right/Left] Increase/Decrease Smoothing" << std::endl;
+	std::cout << "[Alt + Up/Down] Increase/Decrease Hue shift Speed" << std::endl;
+	std::cout << "[Alt + Right/Left] Increase/Decrease Shading" << std::endl;
 
 	std::cout << "--------------------------------------------------" << std::endl;
 
@@ -123,6 +129,8 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "Auto Scaling: " << autoScale << std::endl;
 	std::cout << "Bars: " << bars << std::endl;
 	std::cout << "Smoothing: " << smoothing << std::endl;
+	std::cout << "Hue Shift Speed: " << colourChange << std::endl;
+	std::cout << "Shading: " << shadingRatio << std::endl;
 
 	std::cout << "--------------------------------------------------" << std::endl;
 
@@ -155,7 +163,21 @@ void renderingThread(sf::RenderWindow* window)
 			double barWidth = (WIDTH - 2 * margin_x) / frequencies.size(); 
 			sf::RectangleShape rectangle(sf::Vector2f(barWidth * 0.9, -magnitude));
 			rectangle.setPosition(i * barWidth + margin_x + (0.1 * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
-			rectangle.setFillColor(sf::Color(255 - 200 * (1 - (magnitude / (HEIGHT * 0.86))), 0, 0));
+			sf::Color colour = gradient[(int)floor(colourCounter)];
+			double shader = shadingRatio * (1 - magnitude / (HEIGHT * 0.86));
+			if (shader > 1.0) { shader = 1; }
+			colour.r -= colour.r * shader;
+			colour.g -= colour.g * shader;
+			colour.b -= colour.b * shader;
+			rectangle.setFillColor(colour);
+			if (colourCounter >= 256.0 * 6.0)
+			{ 
+				colourCounter = 0; 
+			}
+			else {
+				colourCounter += colourChange;
+			}
+			//rectangle.setFillColor(sf::Color(255 - 200 * (1 - (magnitude / (HEIGHT * 0.86))), 0, 0));
 			window->draw(rectangle);
 		}
 
@@ -194,6 +216,25 @@ int main() {
 	RECT r;
 	GetWindowRect(console, &r); //stores the console's current dimensions
 	MoveWindow(console, r.left, r.top, 445, 400, TRUE);
+
+	for (int i = 0; i < 256; i++) {
+		gradient[i] = sf::Color(255, i, 0);
+	}
+	for (int i = 0; i < 256; i++) {
+		gradient[i + 256 * 1] = sf::Color(255 - i, 255, 0);
+	}
+	for (int i = 0; i < 256; i++) {
+		gradient[i + 256 * 2] = sf::Color(0, 255, i);
+	}
+	for (int i = 0; i < 256; i++) {
+		gradient[i + 256 * 3] = sf::Color(0, 255 - i, 255);
+	}
+	for (int i = 0; i < 256; i++) {
+		gradient[i + 256 * 4] = sf::Color(i, 0, 255);
+	}
+	for (int i = 0; i < 256; i++) {
+		gradient[i + 256 * 5] = sf::Color(255, 0, 255 - i);
+	}
 
 	frequencies = std::vector<double>();
 
@@ -278,6 +319,41 @@ int main() {
 								smoothing = 0;
 							}
 							std::cout << "[-] Smoothing: " << smoothing << std::endl;
+						}
+						break;
+					}
+				}
+				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LAlt) || sf::Keyboard::isKeyPressed(sf::Keyboard::RAlt)) {
+					switch (event.key.code) {
+					case sf::Keyboard::Up:
+						if (colourChange < 0.5) {
+							colourChange += 0.005;
+							std::cout << "[+] Hue Shift Speed: " << colourChange << std::endl;
+						}
+						break;
+					case sf::Keyboard::Down:
+						if (colourChange > 0) {
+							colourChange -= 0.005;
+							if (colourChange < 0.004) {
+								colourChange = 0;
+							}
+							std::cout << "[-] Hue Shift Speed: " << colourChange << std::endl;
+						}
+						break;
+
+					case sf::Keyboard::Right:
+						if (shadingRatio < 3) {
+							shadingRatio += 0.1;
+							std::cout << "[+] Shading: " << shadingRatio << std::endl;
+						}
+						break;
+					case sf::Keyboard::Left:
+						if (shadingRatio >= 0.1) {
+							shadingRatio -= 0.1;
+							if (shadingRatio < 0.05) {
+								shadingRatio = 0;
+							}
+							std::cout << "[-] Shading: " << shadingRatio << std::endl;
 						}
 						break;
 					}
