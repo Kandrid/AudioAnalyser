@@ -9,18 +9,18 @@
 std::mutex mutex;
 std::vector<double> frequencies;
 const uint32_t WIDTH = 1280;
-const uint32_t HEIGHT = 600;
-uint16_t bars = 30;
+const uint32_t HEIGHT = 365;
+uint16_t bars = 40;
 double scale1 = 160;
 double scale2 = 1.1e-8;
 double smoothing = 0.4;
 double averageMax = HEIGHT / 2;
 uint32_t autoScaleCycles = 300;
 uint16_t autoScaleCount = 0;
-bool autoScale = false;
+bool autoScale = true;
 double colourCounter = 0;
 sf::Color gradient[256 * 6];
-double colourChange = 0.05;
+double colourChange = 0.01;
 double shadingRatio = 0.8;
 
 class Recorder : public sf::SoundRecorder
@@ -38,7 +38,7 @@ class Recorder : public sf::SoundRecorder
 		// truncate the data array by averaging the values over chunks
 		double* result = new double[newSize];
 		double buffer;
-		const size_t chunkSize = size / newSize / 23;
+		const size_t chunkSize = size / newSize / 18;
 		size_t chunk = 0;
 
 		for (size_t i = 0; i < size && chunk < newSize; i += chunkSize) {
