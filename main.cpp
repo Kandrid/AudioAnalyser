@@ -177,7 +177,6 @@ void renderingThread(sf::RenderWindow* window)
 			else {
 				colourCounter += colourChange;
 			}
-			//rectangle.setFillColor(sf::Color(255 - 200 * (1 - (magnitude / (HEIGHT * 0.86))), 0, 0));
 			window->draw(rectangle);
 		}
 
