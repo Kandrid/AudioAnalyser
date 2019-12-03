@@ -38,7 +38,8 @@ class Recorder : public sf::SoundRecorder
 		// truncate the data array by averaging the values over chunks
 		double* result = new double[newSize];
 		double buffer;
-		const size_t chunkSize = size / newSize / 18;
+		size_t chunkSize = size / newSize / 18;
+		if (chunkSize < 1) { chunkSize = 1; }
 		size_t chunk = 0;
 
 		for (size_t i = 0; i < size && chunk < newSize; i += chunkSize) {
@@ -291,7 +292,7 @@ int main() {
 				if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
 					switch (event.key.code) {
 					case sf::Keyboard::Up:
-						if (bars < 100) {
+						if (bars < 200) {
 							bars++;
 							frequencies.clear();
 							std::cout << "[+] Bars: " << bars << std::endl;
