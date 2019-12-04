@@ -10,18 +10,20 @@ std::mutex mutex;
 std::vector<double> frequencies;
 const uint32_t WIDTH = 1280;
 const uint32_t HEIGHT = 365;
-uint16_t bars = 40;
+uint16_t bars = 50;
 double scale1 = 160;
 double scale2 = 1.1e-8;
 double smoothing = 0.4;
 double averageMax = HEIGHT / 2;
-uint32_t autoScaleCycles = 300;
+const uint32_t autoScaleCycles = 300;
 uint16_t autoScaleCount = 0;
 bool autoScale = true;
 double colourCounter = 0;
 sf::Color gradient[256 * 6];
 double colourChange = 0.01;
 double shadingRatio = 0.8;
+uint16_t maxFrequency = 3000;
+bool barGaps = true;
 
 class Recorder : public sf::SoundRecorder
 {
@@ -38,15 +40,14 @@ class Recorder : public sf::SoundRecorder
 		// truncate the data array by averaging the values over chunks
 		double* result = new double[newSize];
 		double buffer;
-		size_t chunkSize = size / newSize / 18;
-		if (chunkSize < 1) { chunkSize = 1; }
+		double chunkSize = ((double)size / (double)newSize) / (20000.0 / (double)maxFrequency);
 		size_t chunk = 0;
 
-		for (size_t i = 0; i < size && chunk < newSize; i += chunkSize) {
+		for (double i = 0; i < size && chunk < newSize; i += chunkSize) {
 			buffer = 0;
 			for (size_t j = 0; j < chunkSize; j++) {
-				if (data[i + j].norm() > 0) {
-					buffer += data[i + j].norm();
+				if (data[(int)floor(i) + j].norm() > 0) {
+					buffer += data[(int)floor(i) + j].norm();
 				}
 			}
 			result[chunk++] = buffer / chunkSize;
@@ -70,7 +71,7 @@ class Recorder : public sf::SoundRecorder
 			return false;
 		}
 
-		double* transform = truncate(complexSamples, size, bars);
+		double* transform = truncate(complexSamples, size / 2, bars);
 
 		// protect access to variables of external threads
 		mutex.lock();
@@ -120,6 +121,8 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "[CTRL + Right/Left] Increase/Decrease Smoothing" << std::endl;
 	std::cout << "[Alt + Up/Down] Increase/Decrease Hue shift Speed" << std::endl;
 	std::cout << "[Alt + Right/Left] Increase/Decrease Shading" << std::endl;
+	std::cout << "[Shift + Up/Down] Increase/Decrease Max Frequency" << std::endl;
+	std::cout << "[BackSpace] Enable/Disable Bar Gaps" << std::endl;
 
 	std::cout << "--------------------------------------------------" << std::endl;
 
@@ -132,6 +135,8 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "Smoothing: " << smoothing << std::endl;
 	std::cout << "Hue Shift Speed: " << colourChange << std::endl;
 	std::cout << "Shading: " << shadingRatio << std::endl;
+	std::cout << "Max Frequency: " << maxFrequency << std::endl;
+	std::cout << "Bar Gaps: " << barGaps << std::endl;
 
 	std::cout << "--------------------------------------------------" << std::endl;
 
@@ -161,9 +166,10 @@ void renderingThread(sf::RenderWindow* window)
 			}
 			double margin_x = WIDTH * 0.035;
 			double margin_y = HEIGHT * 0.07;
-			double barWidth = (WIDTH - 2 * margin_x) / frequencies.size(); 
-			sf::RectangleShape rectangle(sf::Vector2f(barWidth * 0.9, -magnitude));
-			rectangle.setPosition(i * barWidth + margin_x + (0.1 * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
+			double barWidth = (WIDTH - 2 * margin_x) / frequencies.size();
+			double gapRatio = barGaps ? 0.9 : 1;
+			sf::RectangleShape rectangle(sf::Vector2f(barWidth * gapRatio, -magnitude));
+			rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
 			sf::Color colour = gradient[(int)floor(colourCounter)];
 			double shader = shadingRatio * (1 - magnitude / (HEIGHT * 0.86));
 			if (shader > 1.0) { shader = 1; }
@@ -190,14 +196,14 @@ void renderingThread(sf::RenderWindow* window)
 				if (averageMax < HEIGHT * 0.5) {
 					averageMax = HEIGHT / 2;
 					if (scale2 < 1e-3) {
-						scale2 *= 1.1;
+						scale2 *= 1.7;
 						std::cout << "[+] Logarithmic Scale: " << scale2 << std::endl;
 					}
 				}
 				else if (averageMax > HEIGHT * 0.7 || max > HEIGHT * 0.85) {
 					averageMax = HEIGHT / 2;
 					if (scale2 > 1e-12) {
-						scale2 /= 1.1;
+						scale2 /= 1.7;
 						std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
 					}
 				}
@@ -289,10 +295,26 @@ int main() {
 			else if (event.type == sf::Event::KeyPressed) {
 				// protect access to variables of external threads
 				mutex.lock();
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
+				if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
 					switch (event.key.code) {
 					case sf::Keyboard::Up:
-						if (bars < 200) {
+						if (maxFrequency < 20000 - 50) {
+							maxFrequency += 50;
+							std::cout << "[+] Max Frequency: " << maxFrequency << std::endl;
+						}
+						break;
+					case sf::Keyboard::Down:
+						if (maxFrequency > 50) {
+							maxFrequency -= 50;
+							std::cout << "[-] Max Frequency: " << maxFrequency << std::endl;
+						}
+						break;
+					}
+				}
+				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
+					switch (event.key.code) {
+					case sf::Keyboard::Up:
+						if (bars < 2048) {
 							bars++;
 							frequencies.clear();
 							std::cout << "[+] Bars: " << bars << std::endl;
@@ -391,6 +413,15 @@ int main() {
 						}
 						else {
 							std::cout << "[-] Auto Scaling: Disabled" << std::endl;
+						}
+						break;
+					case sf::Keyboard::BackSpace:
+						barGaps = !barGaps;
+						if (barGaps) {
+							std::cout << "[+] Bar Gaps: Enabled" << std::endl;
+						}
+						else {
+							std::cout << "[-] Bar Gaps: Disabled" << std::endl;
 						}
 						break;
 					}
