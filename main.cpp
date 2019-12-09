@@ -8,22 +8,27 @@
 
 std::mutex mutex;
 std::vector<double> frequencies;
+std::vector<double> peaks;
 const uint32_t WIDTH = 1280;
 const uint32_t HEIGHT = 365;
+const uint32_t autoScaleCycles = 300;
+const uint32_t processingInterval = 10;
+const uint32_t bufferSize = 4096;
 uint16_t bars = 50;
+uint16_t autoScaleCount = 0;
+uint16_t maxFrequency = 3000;
+uint16_t peakDecay = 6;
 double scale1 = 82.1;
 double scale2 = 2.01e-8;
 double smoothing = 0.4;
 double averageMax = HEIGHT / 2;
-const uint32_t autoScaleCycles = 300;
-uint16_t autoScaleCount = 0;
-bool autoScale = false;
-double colourCounter = 0;
-sf::Color gradient[256 * 6];
 double colourChange = 0.01;
 double shadingRatio = 0.8;
-uint16_t maxFrequency = 3000;
+double colourCounter = 0;
+bool autoScale = false;
 bool barGaps = true;
+bool delayedPeaks = true;
+sf::Color gradient[256 * 6];
 
 class Recorder : public sf::SoundRecorder
 {
@@ -31,7 +36,7 @@ class Recorder : public sf::SoundRecorder
 	{
 		// initialize whatever has to be done before the capture starts
 		std::cout << "Recorder Started" << std::endl;
-		setProcessingInterval(sf::Time(sf::milliseconds(10)));
+		setProcessingInterval(sf::Time(sf::milliseconds(processingInterval)));
 		// return true to start the capture, or false to cancel it
 		return true;
 	}
@@ -59,19 +64,18 @@ class Recorder : public sf::SoundRecorder
 	virtual bool onProcessSamples(const sf::Int16* samples, size_t sampleCount)
 	{
 		// do something useful with the new chunk of samples
-		const size_t size = 4096;
-		complex* const complexSamples = new complex[size];
+		complex* const complexSamples = new complex[bufferSize];
 		
-		for (int i = 0; i < size; i++) {
+		for (int i = 0; i < bufferSize; i++) {
 			complexSamples[i] = i < sampleCount ? samples[i] : 0;
 		}
 
-		if (!CFFT::Forward(complexSamples, size)) {
+		if (!CFFT::Forward(complexSamples, bufferSize)) {
 			std::cout << "Error: FFT execution failed" << std::endl;
 			return false;
 		}
 
-		double* transform = truncate(complexSamples, size / 2, bars);
+		double* transform = truncate(complexSamples, bufferSize / 2, bars);
 
 		// protect access to variables of external threads
 		mutex.lock();
@@ -80,12 +84,26 @@ class Recorder : public sf::SoundRecorder
 			for (int i = 0; i < bars; i++) {
 				double magnitude = log10(transform[i] * scale2) * scale1;
 				frequencies.push_back(magnitude);
+				if (delayedPeaks) {
+					peaks.push_back(magnitude);
+				}
 			}
 		}
 		else {
 			for (int i = 0; i < bars; i++) {
 				double magnitude = log10(transform[i] * scale2) * scale1;
 				frequencies[i] = (frequencies[i] * smoothing + magnitude * (1 - smoothing));
+				if (delayedPeaks) {
+					if (frequencies[i] > peaks[i]) {
+						peaks[i] = frequencies[i];
+					}
+					else if (peaks[i] > 1) {
+						peaks[i] -= peakDecay;
+						if (frequencies[i] > peaks[i]) {
+							peaks[i] = frequencies[i];
+						}
+					}
+				}
 			}
 		}
 
@@ -122,6 +140,7 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "[Alt + Up/Down] Increase/Decrease Hue shift Speed" << std::endl;
 	std::cout << "[Alt + Right/Left] Increase/Decrease Shading" << std::endl;
 	std::cout << "[Shift + Up/Down] Increase/Decrease Max Frequency" << std::endl;
+	std::cout << "[Shift + Right/Left] Increase/Decrease Peak Decay Speed" << std::endl;
 	std::cout << "[BackSpace] Enable/Disable Bar Gaps" << std::endl;
 
 	std::cout << "--------------------------------------------------" << std::endl;
@@ -137,6 +156,7 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "Shading: " << shadingRatio << std::endl;
 	std::cout << "Max Frequency: " << maxFrequency << std::endl;
 	std::cout << "Bar Gaps: " << barGaps << std::endl;
+	std::cout << "Peak Decay Speed: " << peakDecay << std::endl;
 
 	std::cout << "--------------------------------------------------" << std::endl;
 
@@ -155,6 +175,8 @@ void renderingThread(sf::RenderWindow* window)
 		double max = 1;
 		for (int i = 0; i < frequencies.size(); i++) {
 			double magnitude = frequencies[i];
+			double peak = delayedPeaks ? peaks[i] : 0;
+			sf::RectangleShape rectangle = sf::RectangleShape();
 			if (magnitude > max) {
 				max = magnitude;
 			}
@@ -164,11 +186,19 @@ void renderingThread(sf::RenderWindow* window)
 			else if (magnitude > HEIGHT * 0.86) {
 				magnitude = HEIGHT * 0.86;
 			}
+			if (delayedPeaks) {
+				if (peak < 3) {
+					peak = 3;
+				}
+				else if (peak > HEIGHT * 0.86) {
+					peak = HEIGHT * 0.86;
+				}
+			}
 			double margin_x = WIDTH * 0.035;
 			double margin_y = HEIGHT * 0.07;
 			double barWidth = (WIDTH - 2 * margin_x) / frequencies.size();
 			double gapRatio = barGaps ? 0.9 : 1;
-			sf::RectangleShape rectangle(sf::Vector2f(barWidth * gapRatio, -magnitude));
+			rectangle.setSize(sf::Vector2f(barWidth * gapRatio, -magnitude));
 			rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
 			sf::Color colour = gradient[(int)floor(colourCounter)];
 			double shader = shadingRatio * (1 - magnitude / (HEIGHT * 0.86));
@@ -185,6 +215,12 @@ void renderingThread(sf::RenderWindow* window)
 				colourCounter += colourChange;
 			}
 			window->draw(rectangle);
+			if (delayedPeaks) {
+				rectangle.setFillColor(gradient[(int)(colourCounter + 256 * 3) % (256 * 6)]);
+				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, 3));
+				rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y - peak);
+				window->draw(rectangle);
+			}
 		}
 
 		if (autoScale && (max > 1 || max > HEIGHT * 0.85)) {
@@ -307,6 +343,27 @@ int main() {
 						if (maxFrequency > 50) {
 							maxFrequency -= 50;
 							std::cout << "[-] Max Frequency: " << maxFrequency << std::endl;
+						}
+						break;
+					case sf::Keyboard::Right:
+						if (peakDecay < 20) {
+							peakDecay++;
+							std::cout << "[+] Peak Decay Speed: " << peakDecay << std::endl;
+						}
+						break;
+					case sf::Keyboard::Left:
+						if (peakDecay > 1) {
+							peakDecay--;
+							std::cout << "[-] Peak Decay Speed: " << peakDecay << std::endl;
+						}
+						break;
+					case sf::Keyboard::Space:
+						delayedPeaks = !delayedPeaks;
+						if (delayedPeaks) {
+							std::cout << "[+] Delayed Peaks: Enabled" << std::endl;
+						}
+						else {
+							std::cout << "[-] Delayed Peaks: Disabled" << std::endl;
 						}
 						break;
 					}
