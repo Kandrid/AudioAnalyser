@@ -25,6 +25,7 @@ double averageMax = HEIGHT / 2;
 double colourChange = 0.01;
 double shadingRatio = 0.8;
 double colourCounter = 0;
+double colourOffset = 255 * 2;
 bool autoScale = false;
 bool barGaps = true;
 bool delayedPeaks = true;
@@ -128,7 +129,7 @@ void renderingThread(sf::RenderWindow* window)
 	// activate the window's context
 	window->setActive(true);
 
-	std::cout << "--------------------------------------------------" << std::endl;
+	std::cout << "------------------------------------------------------------------------" << std::endl;
 
 	std::cout << "[Controls]" << std::endl;
 
@@ -140,10 +141,12 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "[Alt + Up/Down] Increase/Decrease Hue shift Speed" << std::endl;
 	std::cout << "[Alt + Right/Left] Increase/Decrease Shading" << std::endl;
 	std::cout << "[Shift + Up/Down] Increase/Decrease Max Frequency" << std::endl;
+	std::cout << "[Shift + BackSpace] Enable/Disable Decaying Peaks" << std::endl;
 	std::cout << "[Shift + Right/Left] Increase/Decrease Peak Decay Speed" << std::endl;
+	std::cout << "[Ctrl + Shift + Up/Down] Increase/Decrease Intensity Based Colour Offset" << std::endl;
 	std::cout << "[BackSpace] Enable/Disable Bar Gaps" << std::endl;
 
-	std::cout << "--------------------------------------------------" << std::endl;
+	std::cout << "------------------------------------------------------------------------" << std::endl;
 
 	std::cout << "[Defaults]" << std::endl;
 
@@ -156,9 +159,11 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "Shading: " << shadingRatio << std::endl;
 	std::cout << "Max Frequency: " << maxFrequency << std::endl;
 	std::cout << "Bar Gaps: " << barGaps << std::endl;
+	std::cout << "Decaying Peaks: " << delayedPeaks << std::endl;
 	std::cout << "Peak Decay Speed: " << peakDecay << std::endl;
+	std::cout << "Colour Intensity Offset: " << colourOffset << std::endl;
 
-	std::cout << "--------------------------------------------------" << std::endl;
+	std::cout << "------------------------------------------------------------------------" << std::endl;
 
 	std::cout << "[Logs]" << std::endl;
 
@@ -200,9 +205,10 @@ void renderingThread(sf::RenderWindow* window)
 			double gapRatio = barGaps ? 0.9 : 1;
 			rectangle.setSize(sf::Vector2f(barWidth * gapRatio, -magnitude));
 			rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
-			sf::Color colour = gradient[(int)floor(colourCounter)];
 			double shader = shadingRatio * (1 - magnitude / (HEIGHT * 0.86));
 			if (shader > 1.0) { shader = 1; }
+			sf::Color colour;
+			colour = gradient[(int)floor(colourCounter + colourOffset * (1 - magnitude / (HEIGHT * 0.86))) % (256 * 6)];
 			colour.r -= colour.r * shader;
 			colour.g -= colour.g * shader;
 			colour.b -= colour.b * shader;
@@ -216,7 +222,7 @@ void renderingThread(sf::RenderWindow* window)
 			}
 			window->draw(rectangle);
 			if (delayedPeaks) {
-				rectangle.setFillColor(gradient[(int)(colourCounter + 256 * 3) % (256 * 6)]);
+				rectangle.setFillColor(sf::Color::White);
 				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, 3));
 				rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y - peak);
 				window->draw(rectangle);
@@ -257,7 +263,7 @@ int main() {
 	HWND console = GetConsoleWindow();
 	RECT r;
 	GetWindowRect(console, &r); //stores the console's current dimensions
-	MoveWindow(console, r.left, r.top, 460, 450, TRUE);
+	MoveWindow(console, r.left, r.top, 650, 700, TRUE);
 
 	for (int i = 0; i < 256; i++) {
 		gradient[i] = sf::Color(255, i, 0);
@@ -331,7 +337,23 @@ int main() {
 			else if (event.type == sf::Event::KeyPressed) {
 				// protect access to variables of external threads
 				mutex.lock();
-				if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
+				if ((sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) && (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl))) {
+					switch (event.key.code) {
+					case sf::Keyboard::Up:
+						if (colourOffset < 256 * 6) {
+							colourOffset++;
+							std::cout << "[+] Colour Intensity Offset: " << colourOffset << std::endl;
+						}
+						break;
+					case sf::Keyboard::Down:
+						if (colourOffset > 0) {
+							colourOffset--;
+							std::cout << "[-] Colour Intensity Offset: " << colourOffset << std::endl;
+						}
+						break;
+					}
+				}
+				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
 					switch (event.key.code) {
 					case sf::Keyboard::Up:
 						if (maxFrequency < 20000 - 50) {
@@ -357,7 +379,7 @@ int main() {
 							std::cout << "[-] Peak Decay Speed: " << peakDecay << std::endl;
 						}
 						break;
-					case sf::Keyboard::Space:
+					case sf::Keyboard::BackSpace:
 						delayedPeaks = !delayedPeaks;
 						if (delayedPeaks) {
 							std::cout << "[+] Delayed Peaks: Enabled" << std::endl;
