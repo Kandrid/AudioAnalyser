@@ -296,6 +296,10 @@ int main() {
 	// deactivate its OpenGL context
 	window.setActive(false);
 
+	// make window always top
+	HWND hwnd = window.getSystemHandle();
+	SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+
 	// launch the rendering thread
 	sf::Thread thread(&renderingThread, &window);
 	thread.launch();
