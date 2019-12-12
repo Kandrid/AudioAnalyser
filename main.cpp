@@ -171,7 +171,7 @@ void renderingThread(sf::RenderWindow* window)
 	while (window->isOpen())
 	{
 		// clear the window with black color
-		window->clear(sf::Color::Black);
+		window->clear(sf::Color(0.0f, 0.0f, 0.0f, 0.0f));
 
 		// protect access to variables of external threads
 		mutex.lock();
@@ -287,9 +287,8 @@ int main() {
 	frequencies = std::vector<double>();
 
 	// create the window (remember: it's safer to create it in the main thread due to OS limitations)
-	sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "OpenGL");
+	sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Audio Visualizer", sf::Style::Default);
 	window.setVerticalSyncEnabled(true);
-	window.setTitle("Audio Visualizer");
 	sf::Image icon;
 	icon.loadFromFile("icon.png");
 	window.setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
