@@ -9,20 +9,20 @@
 std::mutex mutex;
 std::vector<double> frequencies;
 std::vector<double> peaks;
-const uint32_t WIDTH = 1280;
-const uint32_t HEIGHT = 365;
+const uint32_t WIDTH = 1920;
+const uint32_t HEIGHT = 1080;
 const uint32_t autoScaleCycles = 300;
 const uint32_t processingInterval = 10;
 const uint32_t bufferSize = 4096;
 uint16_t bars = 50;
 uint16_t autoScaleCount = 0;
 uint16_t maxFrequency = 3000;
-uint16_t peakDecay = 6;
-double scale1 = 100.0;
+uint16_t peakDecay = 15;
+double scale1 = 285.0;
 double scale2 = 4.0e-9;
 double smoothing = 0.4;
 double averageMax = HEIGHT / 2;
-double colourChange = 0.01;
+double colourChange = 1;
 double shadingRatio = 0.8;
 double colourCounter = 0;
 double colourOffset = 255 * 2;
@@ -185,15 +185,15 @@ void renderingThread(sf::RenderWindow* window)
 			if (magnitude > max) {
 				max = magnitude;
 			}
-			if (magnitude < 3) {
-				magnitude = 3;
+			if (magnitude < HEIGHT * 0.0083) {
+				magnitude = HEIGHT * 0.0083;
 			}
 			else if (magnitude > HEIGHT * 0.86) {
 				magnitude = HEIGHT * 0.86;
 			}
 			if (delayedPeaks) {
-				if (peak < 3) {
-					peak = 3;
+				if (peak < HEIGHT * 0.0083) {
+					peak = HEIGHT * 0.0083;
 				}
 				else if (peak > HEIGHT * 0.86) {
 					peak = HEIGHT * 0.86;
@@ -213,20 +213,21 @@ void renderingThread(sf::RenderWindow* window)
 			colour.g -= colour.g * shader;
 			colour.b -= colour.b * shader;
 			rectangle.setFillColor(colour);
-			if (colourCounter >= 256.0 * 6.0)
-			{ 
-				colourCounter = 0; 
-			}
-			else {
-				colourCounter += colourChange;
-			}
 			window->draw(rectangle);
 			if (delayedPeaks) {
 				rectangle.setFillColor(sf::Color::White);
-				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, 3));
+				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, HEIGHT * 0.0083));
 				rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y - peak);
 				window->draw(rectangle);
 			}
+		}
+
+		if (colourCounter >= 256.0 * 6.0)
+		{
+			colourCounter = 0;
+		}
+		else {
+			colourCounter += colourChange;
 		}
 
 		if (autoScale && (max > 1 || max > HEIGHT * 0.85)) {
@@ -295,6 +296,11 @@ int main() {
 	window.setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
 	// deactivate its OpenGL context
 	window.setActive(false);
+
+	// resize window
+	HWND hwnd = window.getSystemHandle();
+	GetWindowRect(hwnd, &r); //stores the console's current dimensions
+	MoveWindow(hwnd, r.left, r.top, 1280, 365, TRUE);
 
 	// launch the rendering thread
 	sf::Thread thread(&renderingThread, &window);
@@ -368,7 +374,7 @@ int main() {
 						}
 						break;
 					case sf::Keyboard::Right:
-						if (peakDecay < 20) {
+						if (peakDecay < 30) {
 							peakDecay++;
 							std::cout << "[+] Peak Decay Speed: " << peakDecay << std::endl;
 						}
@@ -427,15 +433,15 @@ int main() {
 				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LAlt) || sf::Keyboard::isKeyPressed(sf::Keyboard::RAlt)) {
 					switch (event.key.code) {
 					case sf::Keyboard::Up:
-						if (colourChange < 0.5) {
-							colourChange += 0.005;
+						if (colourChange < 30) {
+							colourChange += 0.5;
 							std::cout << "[+] Hue Shift Speed: " << colourChange << std::endl;
 						}
 						break;
 					case sf::Keyboard::Down:
 						if (colourChange > 0) {
-							colourChange -= 0.005;
-							if (colourChange < 0.004) {
+							colourChange -= 0.5;
+							if (colourChange < 0.4) {
 								colourChange = 0;
 							}
 							std::cout << "[-] Hue Shift Speed: " << colourChange << std::endl;
