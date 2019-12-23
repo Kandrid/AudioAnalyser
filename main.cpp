@@ -1,4 +1,5 @@
 ﻿#include <iostream>
+#include <fstream>
 #include <Windows.h>
 #include <mutex>
 #include "SFML/Audio.hpp"
@@ -28,7 +29,6 @@ double colourCounter = 0;
 double colourOffset = 255 * 2;
 double gapRatio = 0.75;
 bool autoScale = false;
-bool barGaps = true;
 bool delayedPeaks = true;
 sf::Color gradient[256 * 6];
 
@@ -260,11 +260,61 @@ void renderingThread(sf::RenderWindow* window)
 	}
 }
 
+void loadSettings() {
+	std::ifstream file;
+	file.open("settings.txt");
+	if (file) {
+		file >> bars;
+		file >> autoScaleCount;
+		file >> maxFrequency;
+		file >> peakDecay;
+		file >> scale1;
+		file >> scale2;
+		file >> smoothing;
+		file >> colourChange;
+		file >> shadingRatio;
+		file >> colourCounter;
+		file >> colourOffset;
+		file >> gapRatio;
+		file >> autoScale;
+		file >> delayedPeaks;
+		file.close();
+		std::cout << "Settings Loaded" << std::endl;
+	}
+	else {
+		std::cout << "Settings Not Found" << std::endl;
+	}
+}
+
+void saveSettings() {
+	std::ofstream file;
+	file.open("settings.txt");
+	file.clear();
+	file << bars << std::endl;
+	file << autoScaleCount << std::endl;
+	file << maxFrequency << std::endl;
+	file << peakDecay << std::endl;
+	file << scale1 << std::endl;
+	file << scale2 << std::endl;
+	file << smoothing << std::endl;
+	file << colourChange << std::endl;
+	file << shadingRatio << std::endl;
+	file << colourCounter << std::endl;
+	file << colourOffset << std::endl;
+	file << gapRatio << std::endl;
+	file << autoScale << std::endl;
+	file << delayedPeaks << std::endl;
+	file.close();
+	std::cout << "Settings Saved" << std::endl;
+}
+
 int main() {
 	HWND console = GetConsoleWindow();
 	RECT r;
 	GetWindowRect(console, &r); //stores the console's current dimensions
 	MoveWindow(console, r.left, r.top, 650, 700, TRUE);
+
+	loadSettings();
 
 	for (int i = 0; i < 256; i++) {
 		gradient[i] = sf::Color(255, i, 0);
@@ -520,6 +570,7 @@ int main() {
 	}
 
 	recorder.stop();
+	saveSettings();
 
 	return 0;
 }
