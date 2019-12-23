@@ -26,6 +26,7 @@ double colourChange = 1;
 double shadingRatio = 0.8;
 double colourCounter = 0;
 double colourOffset = 255 * 2;
+double gapRatio = 0.75;
 bool autoScale = false;
 bool barGaps = true;
 bool delayedPeaks = true;
@@ -136,15 +137,15 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "[Right/Left] Increase/Decrease Logarithmic Scaling" << std::endl;
 	std::cout << "[Up/Down] Increase/Decrease Linear Scaling" << std::endl;
 	std::cout << "[Space] Enable/Disable Auto Scaling" << std::endl;
+	std::cout << "[BackSpace] Enable/Disable Decaying Peaks" << std::endl;
 	std::cout << "[CTRL + Up/Down] Increase/Decrease Bars" << std::endl;
 	std::cout << "[CTRL + Right/Left] Increase/Decrease Smoothing" << std::endl;
 	std::cout << "[Alt + Up/Down] Increase/Decrease Hue shift Speed" << std::endl;
 	std::cout << "[Alt + Right/Left] Increase/Decrease Shading" << std::endl;
 	std::cout << "[Shift + Up/Down] Increase/Decrease Max Frequency" << std::endl;
-	std::cout << "[Shift + BackSpace] Enable/Disable Decaying Peaks" << std::endl;
 	std::cout << "[Shift + Right/Left] Increase/Decrease Peak Decay Speed" << std::endl;
 	std::cout << "[Ctrl + Shift + Up/Down] Increase/Decrease Intensity Based Colour Offset" << std::endl;
-	std::cout << "[BackSpace] Enable/Disable Bar Gaps" << std::endl;
+	std::cout << "[Ctrl + Shift + Left/Right] Increase/Decrese Bar Gap Ratio" << std::endl;
 
 	std::cout << "------------------------------------------------------------------------" << std::endl;
 
@@ -158,10 +159,10 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "Hue Shift Speed: " << colourChange << std::endl;
 	std::cout << "Shading: " << shadingRatio << std::endl;
 	std::cout << "Max Frequency: " << maxFrequency << std::endl;
-	std::cout << "Bar Gaps: " << barGaps << std::endl;
 	std::cout << "Decaying Peaks: " << delayedPeaks << std::endl;
 	std::cout << "Peak Decay Speed: " << peakDecay << std::endl;
 	std::cout << "Colour Intensity Offset: " << colourOffset << std::endl;
+	std::cout << "Bar Gap Ratio: " << gapRatio << std::endl;
 
 	std::cout << "------------------------------------------------------------------------" << std::endl;
 
@@ -202,7 +203,6 @@ void renderingThread(sf::RenderWindow* window)
 			double margin_x = WIDTH * 0.035;
 			double margin_y = HEIGHT * 0.07;
 			double barWidth = (WIDTH - 2 * margin_x) / frequencies.size();
-			double gapRatio = barGaps ? 0.9 : 1;
 			rectangle.setSize(sf::Vector2f(barWidth * gapRatio, -magnitude));
 			rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
 			double shader = shadingRatio * (1 - magnitude / (HEIGHT * 0.86));
@@ -356,6 +356,18 @@ int main() {
 							std::cout << "[-] Colour Intensity Offset: " << colourOffset << std::endl;
 						}
 						break;
+					case sf::Keyboard::Right:
+						if (gapRatio < 1) {
+							gapRatio += 0.05;
+							std::cout << "[+] Bar Gap Ratio: " << gapRatio << std::endl;
+						}
+						break;
+					case sf::Keyboard::Left:
+						if (gapRatio > 0.05) {
+							gapRatio -= 0.05;
+							std::cout << "[-] Bar Gap Ratio: " << gapRatio << std::endl;
+						}
+						break;
 					}
 				}
 				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
@@ -382,15 +394,6 @@ int main() {
 						if (peakDecay > 1) {
 							peakDecay--;
 							std::cout << "[-] Peak Decay Speed: " << peakDecay << std::endl;
-						}
-						break;
-					case sf::Keyboard::BackSpace:
-						delayedPeaks = !delayedPeaks;
-						if (delayedPeaks) {
-							std::cout << "[+] Delayed Peaks: Enabled" << std::endl;
-						}
-						else {
-							std::cout << "[-] Delayed Peaks: Disabled" << std::endl;
 						}
 						break;
 					}
@@ -500,12 +503,12 @@ int main() {
 						}
 						break;
 					case sf::Keyboard::BackSpace:
-						barGaps = !barGaps;
-						if (barGaps) {
-							std::cout << "[+] Bar Gaps: Enabled" << std::endl;
+						delayedPeaks = !delayedPeaks;
+						if (delayedPeaks) {
+							std::cout << "[+] Delayed Peaks: Enabled" << std::endl;
 						}
 						else {
-							std::cout << "[-] Bar Gaps: Disabled" << std::endl;
+							std::cout << "[-] Delayed Peaks: Disabled" << std::endl;
 						}
 						break;
 					}
