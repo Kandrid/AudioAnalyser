@@ -86,9 +86,7 @@ class Recorder : public sf::SoundRecorder
 			for (int i = 0; i < bars; i++) {
 				double magnitude = log10(transform[i] * scale2) * scale1;
 				frequencies.push_back(magnitude);
-				if (delayedPeaks) {
-					peaks.push_back(magnitude);
-				}
+				peaks.push_back(magnitude);
 			}
 		}
 		else {
