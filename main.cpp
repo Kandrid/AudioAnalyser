@@ -7,6 +7,7 @@
 #include "fft.h"
 #include "complex.h"
 
+const std::string version = "1.6";
 std::mutex mutex;
 std::vector<double> frequencies;
 std::vector<double> peaks;
@@ -30,6 +31,7 @@ double colourOffset = 255 * 2;
 double gapRatio = 0.75;
 bool autoScale = false;
 bool delayedPeaks = true;
+bool decaySmoothing = false;
 sf::Color gradient[256 * 6];
 
 class Recorder : public sf::SoundRecorder
@@ -92,7 +94,12 @@ class Recorder : public sf::SoundRecorder
 		else {
 			for (int i = 0; i < bars; i++) {
 				double magnitude = log10(transform[i] * scale2) * scale1;
-				frequencies[i] = (frequencies[i] * smoothing + magnitude * (1 - smoothing));
+				if (decaySmoothing) {
+					frequencies[i] = magnitude > frequencies[i] ? magnitude : (frequencies[i] * smoothing + magnitude * (1 - smoothing));
+				}
+				else {
+					frequencies[i] = (frequencies[i] * smoothing + magnitude * (1 - smoothing));
+				}
 				if (delayedPeaks) {
 					if (frequencies[i] > peaks[i]) {
 						peaks[i] = frequencies[i];
@@ -136,6 +143,7 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "[Up/Down] Increase/Decrease Linear Scaling" << std::endl;
 	std::cout << "[Space] Enable/Disable Auto Scaling" << std::endl;
 	std::cout << "[BackSpace] Enable/Disable Decaying Peaks" << std::endl;
+	std::cout << "[Shift + BackSpace] Decay-Only Smoothing/Normal Smoothing" << std::endl;
 	std::cout << "[CTRL + Up/Down] Increase/Decrease Bars" << std::endl;
 	std::cout << "[CTRL + Right/Left] Increase/Decrease Smoothing" << std::endl;
 	std::cout << "[Alt + Up/Down] Increase/Decrease Hue shift Speed" << std::endl;
@@ -154,6 +162,7 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "Auto Scaling: " << autoScale << std::endl;
 	std::cout << "Bars: " << bars << std::endl;
 	std::cout << "Smoothing: " << smoothing << std::endl;
+	std::cout << "Smoothing Mode: " << decaySmoothing << std::endl;
 	std::cout << "Hue Shift Speed: " << colourChange << std::endl;
 	std::cout << "Shading: " << shadingRatio << std::endl;
 	std::cout << "Max Frequency: " << maxFrequency << std::endl;
@@ -259,9 +268,12 @@ void renderingThread(sf::RenderWindow* window)
 }
 
 void loadSettings() {
+	std::string temp;
 	std::ifstream file;
 	file.open("settings.txt");
 	if (file) {
+		file >> temp;
+		if (temp != version) { return; }
 		file >> bars;
 		file >> autoScaleCount;
 		file >> maxFrequency;
@@ -276,6 +288,7 @@ void loadSettings() {
 		file >> gapRatio;
 		file >> autoScale;
 		file >> delayedPeaks;
+		file >> decaySmoothing;
 		file.close();
 		std::cout << "Settings Loaded" << std::endl;
 	}
@@ -288,6 +301,7 @@ void saveSettings() {
 	std::ofstream file;
 	file.open("settings.txt");
 	file.clear();
+	file << version << std::endl;
 	file << bars << std::endl;
 	file << autoScaleCount << std::endl;
 	file << maxFrequency << std::endl;
@@ -302,6 +316,7 @@ void saveSettings() {
 	file << gapRatio << std::endl;
 	file << autoScale << std::endl;
 	file << delayedPeaks << std::endl;
+	file << decaySmoothing << std::endl;
 	file.close();
 	std::cout << "Settings Saved" << std::endl;
 }
@@ -444,6 +459,14 @@ int main() {
 							std::cout << "[-] Peak Decay Speed: " << peakDecay << std::endl;
 						}
 						break;
+					case sf::Keyboard::BackSpace:
+						decaySmoothing = !decaySmoothing;
+						if (decaySmoothing) {
+							std::cout << "[=] Smoothing Mode: Decay-Only" << std::endl;
+						}
+						else {
+							std::cout << "[=] Smoothing Mode: Normal" << std::endl;
+						}
 					}
 				}
 				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
