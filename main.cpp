@@ -7,7 +7,7 @@
 #include "fft.h"
 #include "complex.h"
 
-const std::string version = "1.6";
+const std::string version = "1.7";
 std::mutex mutex;
 std::vector<double> frequencies;
 std::vector<double> peaks;
@@ -20,6 +20,7 @@ uint16_t bars = 50;
 uint16_t autoScaleCount = 0;
 uint16_t maxFrequency = 3000;
 uint16_t peakDecay = 15;
+uint16_t divisions = 10;
 double scale1 = 285.0;
 double scale2 = 4.0e-9;
 double smoothing = 0.4;
@@ -32,6 +33,7 @@ double gapRatio = 0.75;
 bool autoScale = false;
 bool delayedPeaks = true;
 bool decaySmoothing = false;
+bool classic = true;
 sf::Color gradient[256 * 6];
 
 class Recorder : public sf::SoundRecorder
@@ -144,14 +146,16 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "[Space] Enable/Disable Auto Scaling" << std::endl;
 	std::cout << "[BackSpace] Enable/Disable Decaying Peaks" << std::endl;
 	std::cout << "[Shift + BackSpace] Decay-Only Smoothing/Normal Smoothing" << std::endl;
-	std::cout << "[CTRL + Up/Down] Increase/Decrease Bars" << std::endl;
-	std::cout << "[CTRL + Right/Left] Increase/Decrease Smoothing" << std::endl;
+	std::cout << "[Ctrl + Up/Down] Increase/Decrease Bars" << std::endl;
+	std::cout << "[Ctrl + Right/Left] Increase/Decrease Smoothing" << std::endl;
+	std::cout << "[Ctrl + Enter] Classic/Normal Display Mode" << std::endl;
 	std::cout << "[Alt + Up/Down] Increase/Decrease Hue shift Speed" << std::endl;
 	std::cout << "[Alt + Right/Left] Increase/Decrease Shading" << std::endl;
 	std::cout << "[Shift + Up/Down] Increase/Decrease Max Frequency" << std::endl;
 	std::cout << "[Shift + Right/Left] Increase/Decrease Peak Decay Speed" << std::endl;
 	std::cout << "[Ctrl + Shift + Up/Down] Increase/Decrease Intensity Based Colour Offset" << std::endl;
 	std::cout << "[Ctrl + Shift + Left/Right] Increase/Decrese Bar Gap Ratio" << std::endl;
+	std::cout << "[Ctrl + Shift + Alt + Up/Down] Increase/Decrease Classic Mode Divisions" << std::endl;
 
 	std::cout << "------------------------------------------------------------------------" << std::endl;
 
@@ -170,6 +174,8 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "Peak Decay Speed: " << peakDecay << std::endl;
 	std::cout << "Colour Intensity Offset: " << colourOffset << std::endl;
 	std::cout << "Bar Gap Ratio: " << gapRatio << std::endl;
+	std::cout << "Display Mode: " << classic << std::endl;
+	std::cout << "Classic Mode Divisions: " << divisions << std::endl;
 
 	std::cout << "------------------------------------------------------------------------" << std::endl;
 
@@ -210,8 +216,6 @@ void renderingThread(sf::RenderWindow* window)
 			double margin_x = WIDTH * 0.035;
 			double margin_y = HEIGHT * 0.07;
 			double barWidth = (WIDTH - 2 * margin_x) / frequencies.size();
-			rectangle.setSize(sf::Vector2f(barWidth * gapRatio, -magnitude));
-			rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
 			double shader = shadingRatio * (1 - magnitude / (HEIGHT * 0.86));
 			if (shader > 1.0) { shader = 1; }
 			sf::Color colour;
@@ -220,12 +224,25 @@ void renderingThread(sf::RenderWindow* window)
 			colour.g -= colour.g * shader;
 			colour.b -= colour.b * shader;
 			rectangle.setFillColor(colour);
-			window->draw(rectangle);
-			if (delayedPeaks) {
-				rectangle.setFillColor(sf::Color::White);
-				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, HEIGHT * 0.0083));
-				rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y - peak);
+			if (classic) {
+				double division = HEIGHT * 0.86 / divisions;
+				int height = floor(magnitude / division);
+				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, 0 - (HEIGHT * 0.86 / divisions) * 0.8));
+				for (int j = 0; j < height; j++) {
+					rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y - j * division);
+					window->draw(rectangle);
+				}
+			}
+			else {
+				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, -magnitude));
+				rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
 				window->draw(rectangle);
+				if (delayedPeaks) {
+					rectangle.setFillColor(sf::Color::White);
+					rectangle.setSize(sf::Vector2f(barWidth * gapRatio, HEIGHT * 0.0083));
+					rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y - peak);
+					window->draw(rectangle);
+				}
 			}
 		}
 
@@ -289,6 +306,8 @@ void loadSettings() {
 		file >> autoScale;
 		file >> delayedPeaks;
 		file >> decaySmoothing;
+		file >> classic;
+		file >> divisions;
 		file.close();
 		std::cout << "Settings Loaded" << std::endl;
 	}
@@ -317,6 +336,8 @@ void saveSettings() {
 	file << autoScale << std::endl;
 	file << delayedPeaks << std::endl;
 	file << decaySmoothing << std::endl;
+	file << classic << std::endl;
+	file << divisions << std::endl;
 	file.close();
 	std::cout << "Settings Saved" << std::endl;
 }
@@ -405,7 +426,23 @@ int main() {
 			else if (event.type == sf::Event::KeyPressed) {
 				// protect access to variables of external threads
 				mutex.lock();
-				if ((sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) && (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl))) {
+				if ((sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) && (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) && (sf::Keyboard::isKeyPressed(sf::Keyboard::LAlt) || sf::Keyboard::isKeyPressed(sf::Keyboard::RAlt))) {
+					switch (event.key.code) {
+					case sf::Keyboard::Up:
+						if (divisions < 40) {
+							divisions++;
+							std::cout << "[+] Classic Divisions: " << divisions << std::endl;
+						}
+						break;
+					case sf::Keyboard::Down:
+						if (divisions > 1) {
+							divisions--;
+							std::cout << "[-] Classic Divisions: " << divisions << std::endl;
+						}
+						break;
+					}
+				}
+				else if ((sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) && (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl))) {
 					switch (event.key.code) {
 					case sf::Keyboard::Up:
 						if (colourOffset < 256 * 6) {
@@ -499,6 +536,15 @@ int main() {
 								smoothing = 0;
 							}
 							std::cout << "[-] Smoothing: " << smoothing << std::endl;
+						}
+						break;
+					case sf::Keyboard::Enter:
+						classic = !classic;
+						if (classic) {
+							std::cout << "[=] Display Mode: Classic" << std::endl;
+						}
+						else {
+							std::cout << "[=] Display Mode: Normal" << std::endl;
 						}
 						break;
 					}
