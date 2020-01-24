@@ -34,6 +34,7 @@ bool autoScale = false;
 bool delayedPeaks = true;
 bool decaySmoothing = false;
 bool classic = true;
+bool borderless = false;
 sf::Color gradient[256 * 6];
 
 class Recorder : public sf::SoundRecorder
@@ -372,21 +373,21 @@ int main() {
 	frequencies = std::vector<double>();
 
 	// create the window (remember: it's safer to create it in the main thread due to OS limitations)
-	sf::RenderWindow window(sf::VideoMode(WIDTH, HEIGHT), "Audio Visualizer", sf::Style::Default);
-	window.setVerticalSyncEnabled(true);
+	sf::RenderWindow* window = new sf::RenderWindow(sf::VideoMode(WIDTH, HEIGHT), "Audio Visualizer", sf::Style::Default);
+	window->setVerticalSyncEnabled(true);
 	sf::Image icon;
 	icon.loadFromFile("icon.png");
-	window.setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
+	window->setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
 	// deactivate its OpenGL context
-	window.setActive(false);
+	window->setActive(false);
 
 	// resize window
-	HWND hwnd = window.getSystemHandle();
+	HWND hwnd = window->getSystemHandle();
 	GetWindowRect(hwnd, &r); //stores the console's current dimensions
 	MoveWindow(hwnd, r.left, r.top, 1280, 365, TRUE);
 
 	// launch the rendering thread
-	sf::Thread thread(&renderingThread, &window);
+	sf::Thread thread(&renderingThread, window);
 	thread.launch();
 
 	// get the available sound input device names
@@ -413,15 +414,27 @@ int main() {
 	recorder.start();
 
 	// the event/logic/whatever loop
-	while (window.isOpen())
+	while (window->isOpen())
 	{
 		// check all the window's events that were triggered since the last iteration of the loop
 		sf::Event event;
-		while (window.pollEvent(event))
+		while (window->pollEvent(event))
 		{
 			// "close requested" event: we close the window
 			if (event.type == sf::Event::Closed) {
-				window.close();
+				window->close();
+			}
+			else if (event.type == sf::Event::MouseButtonPressed) {
+				HWND hwnd = window->getSystemHandle();
+				borderless = !borderless;
+				if (borderless) {
+					SetWindowLongPtr(hwnd, GWL_STYLE, WS_SYSMENU);
+					SetWindowPos(hwnd, HWND_TOPMOST, window->getPosition().x, window->getPosition().y + 39, window->getSize().x + 16, window->getSize().y, SWP_SHOWWINDOW);
+				}
+				else {
+					SetWindowLongPtr(hwnd, GWL_STYLE, WS_TILEDWINDOW);
+					SetWindowPos(hwnd, HWND_NOTOPMOST, window->getPosition().x, window->getPosition().y - 39, window->getSize().x, window->getSize().y + 39, SWP_SHOWWINDOW);
+				}
 			}
 			else if (event.type == sf::Event::KeyPressed) {
 				// protect access to variables of external threads
