@@ -7,7 +7,7 @@
 #include "fft.h"
 #include "complex.h"
 
-const std::string version = "1.7";
+const std::string version = "1.8";
 std::mutex mutex;
 std::vector<double> frequencies;
 std::vector<double> peaks;
@@ -33,8 +33,9 @@ double gapRatio = 0.75;
 bool autoScale = false;
 bool delayedPeaks = true;
 bool decaySmoothing = false;
-bool classic = true;
+bool classic = false;
 bool borderless = false;
+bool inter = false;
 sf::Color gradient[256 * 6];
 
 class Recorder : public sf::SoundRecorder
@@ -133,6 +134,30 @@ class Recorder : public sf::SoundRecorder
 	}
 };
 
+double interpolate(double pos) {
+	if (frequencies.size() == 0) return 0;
+	if (pos < 0 || pos >= frequencies.size()) {
+		std::cout << pos;
+		throw 1;
+	}
+	double diff_f, diff, lower, upper, acc, result;
+	lower = floor(pos);
+	upper = ceil(pos);
+	diff = pos - lower;
+	diff_f = frequencies[lower] - frequencies[upper];
+	if (diff == 0 || diff_f == 0) return frequencies[pos];
+	acc = 4 * diff_f;
+	if (diff <= 0.5) {
+		result = frequencies[lower] - acc * diff * diff / 2;
+	}
+	else {
+		double v = diff_f - acc / 4;
+		diff = upper - pos;
+		result = frequencies[upper] + (v * diff + acc * diff * diff) / 2;
+	}
+	return result;
+}
+
 void renderingThread(sf::RenderWindow* window)
 {
 	// activate the window's context
@@ -152,6 +177,7 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "[Ctrl + Enter] Classic/Normal Display Mode" << std::endl;
 	std::cout << "[Alt + Up/Down] Increase/Decrease Hue shift Speed" << std::endl;
 	std::cout << "[Alt + Right/Left] Increase/Decrease Shading" << std::endl;
+	std::cout << "[Alt + BackSpace] Enable/Disable Bar Interpolation" << std::endl;
 	std::cout << "[Shift + Up/Down] Increase/Decrease Max Frequency" << std::endl;
 	std::cout << "[Shift + Right/Left] Increase/Decrease Peak Decay Speed" << std::endl;
 	std::cout << "[Ctrl + Shift + Up/Down] Increase/Decrease Intensity Based Colour Offset" << std::endl;
@@ -177,6 +203,7 @@ void renderingThread(sf::RenderWindow* window)
 	std::cout << "Bar Gap Ratio: " << gapRatio << std::endl;
 	std::cout << "Display Mode: " << classic << std::endl;
 	std::cout << "Classic Mode Divisions: " << divisions << std::endl;
+	std::cout << "Bar Interpolation: " << inter << std::endl;
 
 	std::cout << "------------------------------------------------------------------------" << std::endl;
 
@@ -192,10 +219,18 @@ void renderingThread(sf::RenderWindow* window)
 		mutex.lock();
 
 		// draw everything here...
+		size_t size = frequencies.size();
+		std::vector<double> inter_f = std::vector<double>();
+		if (inter && size > 1) {
+			for (double i = 0; i <= size - 1; i += (double)size / WIDTH) {
+				inter_f.push_back(interpolate(i));
+			}
+			size = inter_f.size();
+		}
 		double max = 1;
-		for (int i = 0; i < frequencies.size(); i++) {
-			double magnitude = frequencies[i];
-			double peak = delayedPeaks ? peaks[i] : 0;
+		for (int i = 0; i < size; i++) {
+			double magnitude = inter && size > 1 ? inter_f[i] : frequencies[i];
+			double peak = delayedPeaks && !inter ? peaks[i] : 0;
 			sf::RectangleShape rectangle = sf::RectangleShape();
 			if (magnitude > max) {
 				max = magnitude;
@@ -216,7 +251,7 @@ void renderingThread(sf::RenderWindow* window)
 			}
 			double margin_x = WIDTH * 0.035;
 			double margin_y = HEIGHT * 0.07;
-			double barWidth = (WIDTH - 2 * margin_x) / frequencies.size();
+			double barWidth = (WIDTH - 2 * margin_x) / size;
 			double shader = shadingRatio * (1 - magnitude / (HEIGHT * 0.86));
 			if (shader > 1.0) { shader = 1; }
 			sf::Color colour;
@@ -228,20 +263,20 @@ void renderingThread(sf::RenderWindow* window)
 			if (classic) {
 				double division = HEIGHT * 0.86 / divisions;
 				int height = floor(magnitude / division);
-				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, 0 - (HEIGHT * 0.86 / divisions) * 0.8));
+				rectangle.setSize(sf::Vector2f(barWidth * (inter ? 1 : gapRatio), 0 - (HEIGHT * 0.86 / divisions) * 0.8));
 				for (int j = 0; j < height; j++) {
-					rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y - j * division);
+					rectangle.setPosition(i * barWidth + margin_x + ((1 - (inter ? 1 : gapRatio)) * barWidth / size / 2), HEIGHT - margin_y - j * division);
 					window->draw(rectangle);
 				}
 			}
 			else {
-				rectangle.setSize(sf::Vector2f(barWidth * gapRatio, -magnitude));
-				rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y);
+				rectangle.setSize(sf::Vector2f(barWidth * (inter ? 1 : gapRatio), -magnitude));
+				rectangle.setPosition(i * barWidth + margin_x + ((1 - (inter ? 1 : gapRatio)) * barWidth / size / 2), HEIGHT - margin_y);
 				window->draw(rectangle);
 				if (delayedPeaks) {
 					rectangle.setFillColor(sf::Color::White);
-					rectangle.setSize(sf::Vector2f(barWidth * gapRatio, HEIGHT * 0.0083));
-					rectangle.setPosition(i * barWidth + margin_x + ((1 - gapRatio) * barWidth / frequencies.size() / 2), HEIGHT - margin_y - peak);
+					rectangle.setSize(sf::Vector2f(barWidth * (inter ? 1 : gapRatio), HEIGHT * 0.0083));
+					rectangle.setPosition(i * barWidth + margin_x + ((1 - (inter ? 1 : gapRatio)) * barWidth / size / 2), HEIGHT - margin_y - peak);
 					window->draw(rectangle);
 				}
 			}
@@ -309,6 +344,7 @@ void loadSettings() {
 		file >> decaySmoothing;
 		file >> classic;
 		file >> divisions;
+		file >> inter;
 		file.close();
 		std::cout << "Settings Loaded" << std::endl;
 	}
@@ -339,6 +375,7 @@ void saveSettings() {
 	file << decaySmoothing << std::endl;
 	file << classic << std::endl;
 	file << divisions << std::endl;
+	file << inter;
 	file.close();
 	std::cout << "Settings Saved" << std::endl;
 }
@@ -593,6 +630,15 @@ int main() {
 								shadingRatio = 0;
 							}
 							std::cout << "[-] Shading: " << shadingRatio << std::endl;
+						}
+						break;
+					case sf::Keyboard::BackSpace:
+						inter = !inter;
+						if (inter) {
+							std::cout << "[+] Interpolation Mode Enabled" << std::endl;
+						}
+						else {
+							std::cout << "[-] Interpolation Mode Disabled" << std::endl;
 						}
 						break;
 					}
