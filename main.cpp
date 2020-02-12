@@ -433,14 +433,6 @@ int main() {
 	margins.cxLeftWidth = -1;
 	DwmExtendFrameIntoClientArea(window->getSystemHandle(), &margins);
 
-	/*
-	_DWM_BLURBEHIND dwm;
-	dwm.fEnable = true;
-	dwm.hRgnBlur = NULL;
-	dwm.fTransitionOnMaximized = false;
-	dwm.dwFlags = 0b111;
-	DwmEnableBlurBehindWindow(hwnd, &dwm);*/
-
 	// launch the rendering thread
 	sf::Thread thread(&renderingThread, window);
 	thread.launch();
