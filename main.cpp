@@ -2,6 +2,7 @@
 #include <fstream>
 #include <Windows.h>
 #include <mutex>
+#include <dwmapi.h>
 #include "SFML/Audio.hpp"
 #include "SFML/Graphics.hpp"
 #include "fft.h"
@@ -213,7 +214,12 @@ void renderingThread(sf::RenderWindow* window)
 	while (window->isOpen())
 	{
 		// clear the window with black color
-		window->clear(sf::Color(0.0f, 0.0f, 0.0f, 0.0f));
+		if (borderless) {
+			window->clear(sf::Color::Transparent);
+		}
+		else {
+			window->clear(sf::Color::Black);
+		}
 
 		// protect access to variables of external threads
 		mutex.lock();
@@ -422,6 +428,18 @@ int main() {
 	HWND hwnd = window->getSystemHandle();
 	GetWindowRect(hwnd, &r); //stores the console's current dimensions
 	MoveWindow(hwnd, r.left, r.top, 1280, 365, TRUE);
+
+	MARGINS margins;
+	margins.cxLeftWidth = -1;
+	DwmExtendFrameIntoClientArea(window->getSystemHandle(), &margins);
+
+	/*
+	_DWM_BLURBEHIND dwm;
+	dwm.fEnable = true;
+	dwm.hRgnBlur = NULL;
+	dwm.fTransitionOnMaximized = false;
+	dwm.dwFlags = 0b111;
+	DwmEnableBlurBehindWindow(hwnd, &dwm);*/
 
 	// launch the rendering thread
 	sf::Thread thread(&renderingThread, window);
