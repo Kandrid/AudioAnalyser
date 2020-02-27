@@ -7,8 +7,9 @@
 #include "SFML/Graphics.hpp"
 #include "fft.h"
 #include "complex.h"
+#include "spline.h"
 
-const std::string version = "1.8";
+const std::string version = "1.8.2";
 std::mutex mutex;
 std::vector<double> frequencies;
 std::vector<double> peaks;
@@ -135,28 +136,13 @@ class Recorder : public sf::SoundRecorder
 	}
 };
 
+
 double interpolate(double pos) {
-	if (frequencies.size() == 0) return 0;
-	if (pos < 0 || pos >= frequencies.size()) {
-		std::cout << pos;
-		throw 1;
-	}
-	double diff_f, diff, lower, upper, acc, result;
-	lower = floor(pos);
-	upper = ceil(pos);
-	diff = pos - lower;
-	diff_f = frequencies[lower] - frequencies[upper];
-	if (diff == 0 || diff_f == 0) return frequencies[pos];
-	acc = 4 * diff_f;
-	if (diff <= 0.5) {
-		result = frequencies[lower] - acc * diff * diff / 2;
-	}
-	else {
-		double v = diff_f - acc / 4;
-		diff = upper - pos;
-		result = frequencies[upper] + (v * diff + acc * diff * diff) / 2;
-	}
-	return result;
+	std::vector<double> X(frequencies.size());
+	for (size_t i = 0; i < frequencies.size(); i++) X[i] = i + 0.5;
+	tk::spline s;
+	s.set_points(X, frequencies);
+	return s(pos);
 }
 
 void renderingThread(sf::RenderWindow* window)
@@ -227,7 +213,7 @@ void renderingThread(sf::RenderWindow* window)
 		// draw everything here...
 		size_t size = frequencies.size();
 		std::vector<double> inter_f = std::vector<double>();
-		if (inter && size > 1) {
+		if (inter && size > 2) {
 			for (double i = 0; i <= size - 1; i += (double)size / WIDTH) {
 				inter_f.push_back(interpolate(i));
 			}
@@ -235,7 +221,9 @@ void renderingThread(sf::RenderWindow* window)
 		}
 		double max = 1;
 		for (int i = 0; i < size; i++) {
-			double magnitude = inter && size > 1 ? inter_f[i] : frequencies[i];
+			double magnitude;
+			if (size == 0) magnitude = 0;
+			else magnitude = inter && inter_f.size() > 1 ? inter_f[i] : frequencies[i];
 			double peak = delayedPeaks && !inter ? peaks[i] : 0;
 			sf::RectangleShape rectangle = sf::RectangleShape();
 			if (magnitude > max) {
@@ -569,7 +557,7 @@ int main() {
 				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
 					switch (event.key.code) {
 					case sf::Keyboard::Up:
-						if (bars < 2048) {
+						if (bars < 2048 && !(inter && bars >= 25)) {
 							bars++;
 							frequencies.clear();
 							std::cout << "[+] Bars: " << bars << std::endl;
@@ -645,6 +633,15 @@ int main() {
 					case sf::Keyboard::BackSpace:
 						inter = !inter;
 						if (inter) {
+							if (bars > 25) {
+								bars = 25;
+								frequencies.clear();
+								std::cout << "[=] Bars: 25" << std::endl;
+							}
+							if (delayedPeaks) {
+								delayedPeaks = false;
+								std::cout << "[-] Delayed Peaks: Disabled" << std::endl;
+							}
 							std::cout << "[+] Interpolation Mode Enabled" << std::endl;
 						}
 						else {
@@ -689,12 +686,14 @@ int main() {
 						}
 						break;
 					case sf::Keyboard::BackSpace:
-						delayedPeaks = !delayedPeaks;
-						if (delayedPeaks) {
-							std::cout << "[+] Delayed Peaks: Enabled" << std::endl;
-						}
-						else {
-							std::cout << "[-] Delayed Peaks: Disabled" << std::endl;
+						if (!inter) {
+							delayedPeaks = !delayedPeaks;
+							if (delayedPeaks) {
+								std::cout << "[+] Delayed Peaks: Enabled" << std::endl;
+							}
+							else {
+								std::cout << "[-] Delayed Peaks: Disabled" << std::endl;
+							}
 						}
 						break;
 					}

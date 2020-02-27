@@ -153,6 +153,7 @@
     <ClInclude Include="complex.h" />
     <ClInclude Include="fft.h" />
     <ClInclude Include="resource.h" />
+    <ClInclude Include="spline.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="Resource.rc" />
