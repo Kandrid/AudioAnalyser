@@ -15,26 +15,26 @@ std::vector<double> frequencies;
 std::vector<double> peaks;
 const uint32_t WIDTH = 1920;
 const uint32_t HEIGHT = 1080;
-const uint32_t autoScaleCycles = 300;
-const uint32_t processingInterval = 10;
+const uint32_t autoScaleCycles = 100;
+const uint32_t processingInterval = 15;
 const uint32_t bufferSize = 16384;
-uint16_t bars = 50;
+uint16_t bars = 30;
 uint16_t autoScaleCount = 0;
-uint16_t maxFrequency = 3000;
-uint16_t peakDecay = 15;
+uint16_t maxFrequency = 2500;
+uint16_t peakDecay = 12;
 uint16_t divisions = 10;
 double scale1 = 285.0;
-double scale2 = 4.0e-9;
-double smoothing = 0.4;
+double scale2 = 2.2e-9;
+double smoothing = 0.75;
 double averageMax = HEIGHT / 2;
-double colourChange = 1;
-double shadingRatio = 0.8;
+double colourChange = 3.5;
+double shadingRatio = 0;
 double colourCounter = 0;
-double colourOffset = 255 * 2;
-double gapRatio = 0.75;
-bool autoScale = false;
+double colourOffset = 512;
+double gapRatio = 0.7;
+bool autoScale = true;
 bool delayedPeaks = true;
-bool decaySmoothing = false;
+bool decaySmoothing = true;
 bool classic = false;
 bool borderless = false;
 bool inter = false;
@@ -199,6 +199,7 @@ void renderingThread(sf::RenderWindow* window)
 	// the rendering loop
 	while (window->isOpen())
 	{
+
 		// clear the window with black color
 		if (borderless) {
 			window->clear(sf::Color::Transparent);
@@ -226,7 +227,7 @@ void renderingThread(sf::RenderWindow* window)
 			else magnitude = inter && inter_f.size() > 1 ? inter_f[i] : frequencies[i];
 			double peak = delayedPeaks && !inter ? peaks[i] : 0;
 			sf::RectangleShape rectangle = sf::RectangleShape();
-			if (magnitude > max) {
+			if (magnitude > max && (double)i / bars >= 0.15) {
 				max = magnitude;
 			}
 			if (magnitude < HEIGHT * 0.0083) {
@@ -284,24 +285,24 @@ void renderingThread(sf::RenderWindow* window)
 			colourCounter += colourChange;
 		}
 
-		if (autoScale && (max > 1 || max > HEIGHT * 0.85)) {
+		if (autoScale && (max > 5 || max > HEIGHT * 0.85)) {
 			double ratio = 1.0 / autoScaleCycles;
 			averageMax = max * ratio + averageMax * (1 - ratio);
 			autoScaleCount++;
-			if (autoScaleCount > 100) {
+			if (autoScaleCount > autoScaleCycles) {
 				autoScaleCount = 0;
-				if (averageMax < HEIGHT * 0.5) {
+				if (averageMax < HEIGHT * 0.45) {
 					averageMax = HEIGHT / 2;
 					if (scale2 < 1e-3) {
-						scale2 *= 1.7;
-						std::cout << "[+] Logarithmic Scale: " << scale2 << std::endl;
+						scale2 *= 1.35;
+						std::cout << "[+] (Auto Scaling) Logarithmic Scale: " << scale2 << std::endl;
 					}
 				}
-				else if (averageMax > HEIGHT * 0.7 || max > HEIGHT * 0.85) {
+				else if (averageMax > HEIGHT * 0.65 || max > HEIGHT * 0.85) {
 					averageMax = HEIGHT / 2;
 					if (scale2 > 1e-12) {
-						scale2 /= 1.7;
-						std::cout << "[-] Logarithmic Scale: " << scale2 << std::endl;
+						scale2 /= 1.35;
+						std::cout << "[-] (Auto Scaling) Logarithmic Scale: " << scale2 << std::endl;
 					}
 				}
 			}
@@ -317,7 +318,7 @@ void renderingThread(sf::RenderWindow* window)
 void loadSettings() {
 	std::string temp;
 	std::ifstream file;
-	file.open("settings.txt");
+	file.open("settings.ini");
 	if (file) {
 		file >> temp;
 		if (temp != version) { return; }
@@ -349,7 +350,7 @@ void loadSettings() {
 
 void saveSettings() {
 	std::ofstream file;
-	file.open("settings.txt");
+	file.open("settings.ini");
 	file.clear();
 	file << version << std::endl;
 	file << bars << std::endl;
@@ -405,7 +406,8 @@ int main() {
 
 	// create the window (remember: it's safer to create it in the main thread due to OS limitations)
 	sf::RenderWindow* window = new sf::RenderWindow(sf::VideoMode(WIDTH, HEIGHT), "Audio Visualizer", sf::Style::Default);
-	window->setVerticalSyncEnabled(true);
+	window->setVerticalSyncEnabled(false);
+	window->setFramerateLimit(60);
 	sf::Image icon;
 	icon.loadFromFile("icon.png");
 	window->setIcon(icon.getSize().x, icon.getSize().y, icon.getPixelsPtr());
