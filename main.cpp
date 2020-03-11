@@ -263,6 +263,13 @@ void renderingThread(sf::RenderWindow* window)
 					rectangle.setPosition(i * barWidth + margin_x + ((1 - (inter ? 1 : gapRatio)) * barWidth / size / 2), HEIGHT - margin_y - j * division);
 					window->draw(rectangle);
 				}
+				if (delayedPeaks) {
+					int peakHeight = floor(peak / division);
+					if (peakHeight >= divisions) peakHeight = divisions - 1;
+					rectangle.setFillColor(sf::Color::White);
+					rectangle.setPosition(i * barWidth + margin_x + ((1 - (inter ? 1 : gapRatio)) * barWidth / size / 2), HEIGHT - margin_y - peakHeight * division);
+					window->draw(rectangle);
+				}
 			}
 			else {
 				rectangle.setSize(sf::Vector2f(barWidth * (inter ? 1 : gapRatio), -magnitude));
@@ -523,7 +530,7 @@ int main() {
 				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LShift) || sf::Keyboard::isKeyPressed(sf::Keyboard::RShift)) {
 					switch (event.key.code) {
 					case sf::Keyboard::Up:
-						if (maxFrequency < 20000 - 50) {
+						if (maxFrequency < 16000 - 50) {
 							maxFrequency += 50;
 							std::cout << "[+] Max Frequency: " << maxFrequency << std::endl;
 						}
@@ -535,7 +542,7 @@ int main() {
 						}
 						break;
 					case sf::Keyboard::Right:
-						if (peakDecay < 30) {
+						if (peakDecay < 40) {
 							peakDecay++;
 							std::cout << "[+] Peak Decay Speed: " << peakDecay << std::endl;
 						}
