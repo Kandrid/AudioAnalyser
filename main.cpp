@@ -566,7 +566,7 @@ int main() {
 				else if (sf::Keyboard::isKeyPressed(sf::Keyboard::LControl) || sf::Keyboard::isKeyPressed(sf::Keyboard::RControl)) {
 					switch (event.key.code) {
 					case sf::Keyboard::Up:
-						if (bars < 2048 && !(inter && bars >= 25)) {
+						if (bars < 2048 && !(inter && bars >= 50)) {
 							bars++;
 							frequencies.clear();
 							std::cout << "[+] Bars: " << bars << std::endl;
@@ -642,10 +642,10 @@ int main() {
 					case sf::Keyboard::BackSpace:
 						inter = !inter;
 						if (inter) {
-							if (bars > 25) {
-								bars = 25;
+							if (bars > 50) {
+								bars = 50;
 								frequencies.clear();
-								std::cout << "[=] Bars: 25" << std::endl;
+								std::cout << "[=] Bars: " << bars << std::endl;
 							}
 							if (delayedPeaks) {
 								delayedPeaks = false;
